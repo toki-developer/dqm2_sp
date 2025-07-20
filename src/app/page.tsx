@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import resultData from "../../resource/breeding.json";
 
-type ResultType = Record<string, { childrenList: string[] }>;
+type ResultType = Record<string, { childrenList: string[][] }>;
 const result = resultData as ResultType;
 
 // ひらがな→カタカナ変換
@@ -22,7 +22,7 @@ function getCandidates(input: string): string[] {
 }
 
 type TreeProps = {
-  data: { childrenList: string[] };
+  data: { childrenList: string[][] };
   depth?: number;
   path: string; // 追加: 現在のパス
   checkedMap?: Record<string, boolean>;
@@ -31,6 +31,7 @@ type TreeProps = {
   setWildMap?: (map: Record<string, boolean>) => void;
   genderMap?: Record<string, number>;
   setGenderMap?: (map: Record<string, number>) => void;
+  visited?: Set<string>;
 };
 
 function Tree({
@@ -43,14 +44,24 @@ function Tree({
   setWildMap = () => {},
   genderMap = {},
   setGenderMap = () => {},
+  visited = new Set(), // 追加: ループ検出用
 }: TreeProps) {
   if (!data || !data.childrenList || data.childrenList.length === 0)
     return null;
+  const pattern = data.childrenList[0];
+  if (!pattern) return null;
+
+  const isLoop = pattern.some((child) => visited.has(child));
+  if (isLoop) {
+    return null;
+  }
+
   return (
     <ul style={{ marginLeft: depth * 4 }}>
-      {data.childrenList.map((child, idx) => {
+      {pattern.map((child, idx) => {
         const childPath = path ? `${path}/${child}:${idx}` : `${child}:${idx}`;
-        // wildMapはchild名で参照
+        const nextVisited = new Set(visited);
+        nextVisited.add(child);
         return (
           <li key={childPath} style={{ position: "relative" }}>
             <label
@@ -145,6 +156,7 @@ function Tree({
                 setWildMap={setWildMap}
                 genderMap={genderMap}
                 setGenderMap={setGenderMap}
+                visited={nextVisited}
               />
             )}
           </li>
@@ -232,25 +244,151 @@ function collectLeafMonsters(
   name: string,
   path: string,
   wildMap: Record<string, boolean>,
-  checkedMap: Record<string, boolean>
+  checkedMap: Record<string, boolean>,
+  visited: Set<string> = new Set()
 ): string[] {
-  // checkedMapで非表示なら末端扱いにしない
   if (checkedMap[path]) return [];
-  // 野生マークがついていればそのモンスターのみ
   if (wildMap[name]) return [name];
+  if (visited.has(name)) return [];
   const node = result[name];
   if (!node || !node.childrenList || node.childrenList.length === 0) {
     return [name];
   }
-  // 子がいれば再帰的に集める
+  // 1つ目のパターンのみ
+  const pattern = node.childrenList[0];
+  if (!pattern) return [name];
   let leaves: string[] = [];
-  node.childrenList.forEach((child, idx) => {
+  const nextVisited = new Set(visited);
+  nextVisited.add(name);
+  pattern.forEach((child, idx) => {
     const childPath = path ? `${path}/${child}:${idx}` : `${child}:${idx}`;
     leaves = leaves.concat(
-      collectLeafMonsters(child, childPath, wildMap, checkedMap)
+      collectLeafMonsters(child, childPath, wildMap, checkedMap, nextVisited)
     );
   });
   return leaves;
+}
+
+// 必要なモンスター一覧コンポーネント
+function RequiredMonstersList({
+  selected,
+  wildMap,
+  checkedMap,
+}: {
+  selected: string;
+  wildMap: Record<string, boolean>;
+  checkedMap: Record<string, boolean>;
+}) {
+  const leaves = collectLeafMonsters(
+    selected,
+    `${selected}:0`,
+    wildMap,
+    checkedMap
+  );
+  // モンスターごとに個数をカウント
+  const countMap: Record<string, number> = {};
+  leaves.forEach((name) => {
+    countMap[name] = (countMap[name] || 0) + 1;
+  });
+  const uniqueLeaves = Object.keys(countMap);
+  return (
+    <div className="mt-6">
+      <span className="block text-sm text-gray-300 mb-1">
+        必要なモンスター一覧
+      </span>
+      <div className="rounded-lg px-4 py-2 bg-blue-500/20 text-white text-base font-semibold flex flex-wrap items-center gap-x-2 gap-y-1">
+        {uniqueLeaves.map((name, idx) => (
+          <span key={name} className="flex items-center">
+            {name}
+            {countMap[name] > 1 && `×${countMap[name]}`}
+            {idx < uniqueLeaves.length - 1 && (
+              <span className="mx-2 text-blue-100">|</span>
+            )}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// 作成途中モンスター一覧コンポーネント
+function InProgressMonstersList({
+  checkedMap,
+  selected,
+  setSelected,
+}: {
+  checkedMap: Record<string, Record<string, boolean>>;
+  selected: string;
+  setSelected: React.Dispatch<React.SetStateAction<string>>;
+}) {
+  if (Object.keys(checkedMap).length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2 mb-4 text-gray-500 mt-4">
+      <span className="w-full text-sm mb-1">作成途中モンスター</span>
+      {Object.keys(checkedMap).map((root) => (
+        <button
+          key={root}
+          type="button"
+          className={`px-3 py-1 rounded border bg-white/10 font-semibold shadow-sm hover:bg-white/20 transition-colors duration-100 ${
+            selected === root ? "text-blue-400 border-blue-500" : ""
+          }`}
+          onClick={() => setSelected(root)}
+          aria-current={selected === root ? "true" : undefined}
+        >
+          {root}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// 経過削除ボタンコンポーネント
+function DeleteProgressButton({
+  selected,
+  setCheckedMap,
+  setGenderMap,
+  setSelected,
+}: {
+  selected: string;
+  setCheckedMap: React.Dispatch<
+    React.SetStateAction<Record<string, Record<string, boolean>>>
+  >;
+  setGenderMap: React.Dispatch<
+    React.SetStateAction<Record<string, Record<string, number>>>
+  >;
+  setSelected: React.Dispatch<React.SetStateAction<string>>;
+}) {
+  return (
+    <button
+      type="button"
+      className="mt-8 px-2 py-1 text-red-500 text-sm font-normal bg-transparent border-none shadow-none hover:underline focus:underline outline-none"
+      onClick={() => {
+        setCheckedMap((prev) => {
+          const { [selected]: _, ...rest } = prev;
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(
+              "dqm2_tree_checked",
+              JSON.stringify(rest)
+            );
+          }
+          return rest;
+        });
+        setGenderMap((prev) => {
+          const { [selected]: _, ...rest } = prev;
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(
+              "dqm2_tree_gender",
+              JSON.stringify(rest)
+            );
+          }
+          return rest;
+        });
+        setSelected("");
+      }}
+    >
+      この作成途中モンスターの経過を削除
+    </button>
+  );
 }
 
 export default function Home() {
@@ -346,24 +484,11 @@ export default function Home() {
         </ul>
       )}
       {/* 作成途中モンスター一覧 横並び・グレー文字・候補リストの下 */}
-      {Object.keys(checkedMap).length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4 text-gray-500 mt-4">
-          <span className="w-full text-sm mb-1">作成途中モンスター</span>
-          {Object.keys(checkedMap).map((root) => (
-            <button
-              key={root}
-              type="button"
-              className={`px-3 py-1 rounded border bg-white/10 font-semibold shadow-sm hover:bg-white/20 transition-colors duration-100 ${
-                selected === root ? "text-blue-400 border-blue-500" : ""
-              }`}
-              onClick={() => setSelected(root)}
-              aria-current={selected === root ? "true" : undefined}
-            >
-              {root}
-            </button>
-          ))}
-        </div>
-      )}
+      <InProgressMonstersList
+        checkedMap={checkedMap}
+        selected={selected}
+        setSelected={setSelected}
+      />
       {selected && result[selected] && (
         <div className="mt-6">
           <h2 className="text-xl font-semibold mb-2">
@@ -380,69 +505,17 @@ export default function Home() {
             genderMap={genderMapForSelected}
             setGenderMap={setGenderMapForSelected}
           />
-          {/* 必要なモンスター一覧 */}
-          {(() => {
-            const leaves = collectLeafMonsters(
-              selected,
-              `${selected}:0`,
-              wildMap,
-              checkedMapForSelected
-            );
-            // モンスターごとに個数をカウント
-            const countMap: Record<string, number> = {};
-            leaves.forEach((name) => {
-              countMap[name] = (countMap[name] || 0) + 1;
-            });
-            const uniqueLeaves = Object.keys(countMap);
-            return (
-              <div className="mt-6">
-                <span className="block text-sm text-gray-300 mb-1">
-                  必要なモンスター一覧
-                </span>
-                <div className="rounded-lg px-4 py-2 bg-blue-500/20 text-white text-base font-semibold flex flex-wrap items-center gap-x-2 gap-y-1">
-                  {uniqueLeaves.map((name, idx) => (
-                    <span key={name} className="flex items-center">
-                      {name}
-                      {countMap[name] > 1 && `×${countMap[name]}`}
-                      {idx < uniqueLeaves.length - 1 && (
-                        <span className="mx-2 text-blue-100">|</span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-          {/* 経過削除ボタン（背景・枠線なし、赤文字のみ） */}
-          <button
-            type="button"
-            className="mt-8 px-2 py-1 text-red-500 text-sm font-normal bg-transparent border-none shadow-none hover:underline focus:underline outline-none"
-            onClick={() => {
-              setCheckedMap((prev) => {
-                const { [selected]: _, ...rest } = prev;
-                if (typeof window !== "undefined") {
-                  window.localStorage.setItem(
-                    "dqm2_tree_checked",
-                    JSON.stringify(rest)
-                  );
-                }
-                return rest;
-              });
-              setGenderMap((prev) => {
-                const { [selected]: _, ...rest } = prev;
-                if (typeof window !== "undefined") {
-                  window.localStorage.setItem(
-                    "dqm2_tree_gender",
-                    JSON.stringify(rest)
-                  );
-                }
-                return rest;
-              });
-              setSelected("");
-            }}
-          >
-            この作成途中モンスターの経過を削除
-          </button>
+          <RequiredMonstersList
+            selected={selected}
+            wildMap={wildMap}
+            checkedMap={checkedMapForSelected}
+          />
+          <DeleteProgressButton
+            selected={selected}
+            setCheckedMap={setCheckedMap}
+            setGenderMap={setGenderMap}
+            setSelected={setSelected}
+          />
         </div>
       )}
     </div>
