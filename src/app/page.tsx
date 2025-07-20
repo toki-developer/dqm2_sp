@@ -57,7 +57,7 @@ function Tree({
   }
 
   return (
-    <ul style={{ marginLeft: depth * 4 }}>
+    <ul style={{ marginLeft: depth * 4 }} className="whitespace-nowrap">
       {pattern.map((child, idx) => {
         const childPath = path ? `${path}/${child}:${idx}` : `${child}:${idx}`;
         const nextVisited = new Set(visited);
@@ -451,7 +451,7 @@ export default function Home() {
   };
 
   return (
-    <div className="max-w-xl mx-auto p-6">
+    <div className="mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">配合ツリー検索</h1>
       <input
         type="search"
