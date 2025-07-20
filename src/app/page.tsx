@@ -5,11 +5,19 @@ import resultData from "../../resource/breeding.json";
 type ResultType = Record<string, { childrenList: string[] }>;
 const result = resultData as ResultType;
 
+// ひらがな→カタカナ変換
+function hiraToKana(str: string): string {
+  return str.replace(/[\u3041-\u3096]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) + 0x60)
+  );
+}
+
 function getCandidates(input: string): string[] {
   if (!input) return [];
-  const lower = input.toLowerCase();
+  // 入力・候補名ともカタカナに正規化
+  const inputKana = hiraToKana(input).toLowerCase();
   return Object.keys(result).filter((name) =>
-    name.toLowerCase().includes(lower)
+    hiraToKana(name).toLowerCase().includes(inputKana)
   );
 }
 
@@ -308,7 +316,7 @@ export default function Home() {
     <div className="max-w-xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">配合ツリー検索</h1>
       <input
-        type="text"
+        type="search"
         value={input}
         onChange={(e) => {
           setInput(e.target.value);
@@ -316,27 +324,24 @@ export default function Home() {
         }}
         placeholder="モンスター名を入力"
         className="w-full text-lg p-2 mb-2 bg-transparent border-2 border-blue-400 rounded-lg outline-none shadow-sm focus:border-blue-600 placeholder-gray-400"
-        list="candidates"
+        aria-label="モンスター名を入力"
+        autoComplete="off"
       />
-      <datalist id="candidates">
-        {candidates.map((name) => (
-          <option value={name} key={name} />
-        ))}
-      </datalist>
       {input && candidates.length > 0 && !selected && (
         <ul className="bg-transparent border-2 border-blue-400 p-2 rounded-lg mb-2 shadow-sm">
           {candidates.slice(0, 10).map((name) => (
-            <button
-              key={name}
-              type="button"
-              className="block w-full text-left cursor-pointer p-2 hover:bg-blue-100 rounded bg-transparent text-lg border-none outline-none"
-              onClick={() => setSelected(name)}
-              onKeyUp={(e) => {
-                if (e.key === "Enter") setSelected(name);
-              }}
-            >
-              {name}
-            </button>
+            <li key={name}>
+              <button
+                type="button"
+                className="block w-full text-left cursor-pointer p-2 hover:bg-blue-100 rounded bg-transparent text-lg border-none outline-none"
+                onClick={() => setSelected(name)}
+                onKeyUp={(e) => {
+                  if (e.key === "Enter") setSelected(name);
+                }}
+              >
+                {name}
+              </button>
+            </li>
           ))}
         </ul>
       )}
