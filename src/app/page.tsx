@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { asyncLocalStorageSetItem } from "@/utils/local-storage";
 import resultData from "../../resource/breeding.json";
 
 type ResultType = Record<string, { childrenList: string[][] }>;
@@ -77,12 +78,7 @@ function Tree({
                     [childPath]: !checkedMap[childPath],
                   };
                   setCheckedMap(newMap);
-                  if (typeof window !== "undefined") {
-                    window.localStorage.setItem(
-                      "dqm2_tree_checked",
-                      JSON.stringify(newMap)
-                    );
-                  }
+                  asyncLocalStorageSetItem("dqm2_tree_checked", newMap);
                 }}
                 className="cursor-pointer mr-2 bg-transparent border-none p-0 text-inherit align-baseline"
               >
@@ -98,12 +94,7 @@ function Tree({
                       [childPath]: !checkedMap[childPath],
                     };
                     setCheckedMap(newMap);
-                    if (typeof window !== "undefined") {
-                      window.localStorage.setItem(
-                        "dqm2_tree_checked",
-                        JSON.stringify(newMap)
-                      );
-                    }
+                    asyncLocalStorageSetItem("dqm2_tree_checked", newMap);
                   }}
                   className="peer w-5 h-5 border-2 border-blue-400 rounded-full checked:bg-blue-500 checked:border-transparent focus:outline-none transition-colors duration-150 align-middle appearance-none flex-shrink-0"
                   style={{
@@ -187,9 +178,7 @@ function GenderToggleButton({
     const newGender = (gender + 1) % 4;
     const newMap = { ...genderMap, [path]: newGender };
     setGenderMap(newMap);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("dqm2_tree_gender", JSON.stringify(newMap));
-    }
+    asyncLocalStorageSetItem("dqm2_tree_gender", newMap);
   };
   return (
     <button
@@ -218,9 +207,7 @@ function WildToggleButton({
   const toggleWild = () => {
     const newMap = { ...wildMap, [name]: !wild };
     setWildMap(newMap);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("dqm2_tree_wild", JSON.stringify(newMap));
-    }
+    asyncLocalStorageSetItem("dqm2_tree_wild", newMap);
   };
   return (
     <button
@@ -365,22 +352,12 @@ function DeleteProgressButton({
       onClick={() => {
         setCheckedMap((prev) => {
           const { [selected]: _, ...rest } = prev;
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem(
-              "dqm2_tree_checked",
-              JSON.stringify(rest)
-            );
-          }
+          asyncLocalStorageSetItem("dqm2_tree_checked", rest);
           return rest;
         });
         setGenderMap((prev) => {
           const { [selected]: _, ...rest } = prev;
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem(
-              "dqm2_tree_gender",
-              JSON.stringify(rest)
-            );
-          }
+          asyncLocalStorageSetItem("dqm2_tree_gender", rest);
           return rest;
         });
         setSelected("");
@@ -427,12 +404,7 @@ export default function Home() {
   const setCheckedMapForSelected = (map: Record<string, boolean>) => {
     setCheckedMap((prev) => {
       const newCheckedMap = { ...prev, [selected]: map };
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          "dqm2_tree_checked",
-          JSON.stringify(newCheckedMap)
-        );
-      }
+      asyncLocalStorageSetItem("dqm2_tree_checked", newCheckedMap);
       return newCheckedMap;
     });
   };
@@ -440,12 +412,7 @@ export default function Home() {
   const setGenderMapForSelected = (map: Record<string, number>) => {
     setGenderMap((prev) => {
       const newGenderMap = { ...prev, [selected]: map };
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          "dqm2_tree_gender",
-          JSON.stringify(newGenderMap)
-        );
-      }
+      asyncLocalStorageSetItem("dqm2_tree_gender", newGenderMap);
       return newGenderMap;
     });
   };
