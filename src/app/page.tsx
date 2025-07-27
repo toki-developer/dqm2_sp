@@ -595,7 +595,7 @@ export default function Home() {
 
   return (
     <div className="mx-auto p-6 relative">
-      <h1 className="text-2xl font-bold mb-4">配合ツリー検索</h1>
+      <h1 className="text-2xl font-bold mb-4">イルルカSP 配合ツリー検索</h1>
       <input
         type="search"
         value={input}
