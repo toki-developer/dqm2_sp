@@ -1,18 +1,13 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { asyncLocalStorageSetItem } from "@/utils/local-storage";
+import { hiraToKana } from "@/utils/string";
 import resultData from "../../resource/breeding.json";
 
 type ResultType = Record<string, { childrenList: string[][] }>;
 const result = resultData as ResultType;
 
 // ひらがな→カタカナ変換
-function hiraToKana(str: string): string {
-  return str.replace(/[\u3041-\u3096]/g, (ch) =>
-    String.fromCharCode(ch.charCodeAt(0) + 0x60)
-  );
-}
-
 function getCandidates(input: string): string[] {
   if (!input) return [];
   // 入力・候補名ともカタカナに正規化
