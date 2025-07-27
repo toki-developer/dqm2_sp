@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { asyncLocalStorageSetItem } from "@/utils/local-storage";
 import { hiraToKana } from "@/utils/string";
 import resultData from "../../resource/breeding.json";
@@ -17,137 +17,117 @@ function getCandidates(input: string): string[] {
   );
 }
 
+// 表示用ツリー構造の型
+export type DisplayTreeNode = {
+  name: string;
+  children: DisplayTreeNode[];
+  path: string;
+};
+
 type TreeProps = {
-  data: { childrenList: string[][] };
-  depth?: number;
-  path: string; // 追加: 現在のパス
+  node: DisplayTreeNode;
   checkedMap?: Record<string, boolean>;
   setCheckedMap?: (map: Record<string, boolean>) => void;
   wildMap?: Record<string, boolean>;
   setWildMap?: (map: Record<string, boolean>) => void;
   genderMap?: Record<string, number>;
   setGenderMap?: (map: Record<string, number>) => void;
-  visited?: Set<string>;
 };
 
 function Tree({
-  data,
-  depth = 0,
-  path,
+  node,
   checkedMap = {},
   setCheckedMap = () => {},
   wildMap = {},
   setWildMap = () => {},
   genderMap = {},
   setGenderMap = () => {},
-  visited = new Set(), // 追加: ループ検出用
 }: TreeProps) {
-  if (!data || !data.childrenList || data.childrenList.length === 0)
-    return null;
-  const pattern = data.childrenList[0];
-  if (!pattern) return null;
-
-  const isLoop = pattern.some((child) => visited.has(child));
-  if (isLoop) {
-    return null;
-  }
-
+  const { name, children, path } = node;
   return (
-    <ul style={{ marginLeft: depth * 4 }} className="whitespace-nowrap">
-      {pattern.map((child, idx) => {
-        const childPath = path ? `${path}/${child}:${idx}` : `${child}:${idx}`;
-        const nextVisited = new Set(visited);
-        nextVisited.add(child);
-        return (
-          <li key={childPath} style={{ position: "relative" }}>
-            <label
-              className="inline-flex items-center ml-0 cursor-pointer select-none relative"
-              style={{ position: "relative" }}
+    <ul className="whitespace-nowrap">
+      <li key={path} style={{ position: "relative" }}>
+        <label
+          className="inline-flex items-center ml-0 cursor-pointer select-none relative"
+          style={{ position: "relative" }}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              const newMap = {
+                ...checkedMap,
+                [path]: !checkedMap[path],
+              };
+              setCheckedMap(newMap);
+              asyncLocalStorageSetItem("dqm2_tree_checked", newMap);
+            }}
+            className="cursor-pointer mr-2 bg-transparent border-none p-0 text-inherit align-baseline"
+          >
+            {name}
+          </button>
+          <div className="relative inline-flex items-center">
+            <input
+              type="checkbox"
+              checked={!!checkedMap[path]}
+              onChange={() => {
+                const newMap = {
+                  ...checkedMap,
+                  [path]: !checkedMap[path],
+                };
+                setCheckedMap(newMap);
+                asyncLocalStorageSetItem("dqm2_tree_checked", newMap);
+              }}
+              className="peer w-5 h-5 border-2 border-blue-400 rounded-full checked:bg-blue-500 checked:border-transparent focus:outline-none transition-colors duration-150 align-middle appearance-none flex-shrink-0"
+              style={{ position: "relative", zIndex: 1, background: "none" }}
+            />
+            <svg
+              className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 w-5 h-5 text-white peer-checked:block hidden"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ zIndex: 2 }}
             >
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  const newMap = {
-                    ...checkedMap,
-                    [childPath]: !checkedMap[childPath],
-                  };
-                  setCheckedMap(newMap);
-                  asyncLocalStorageSetItem("dqm2_tree_checked", newMap);
-                }}
-                className="cursor-pointer mr-2 bg-transparent border-none p-0 text-inherit align-baseline"
-              >
-                {child}
-              </button>
-              <div className="relative inline-flex items-center">
-                <input
-                  type="checkbox"
-                  checked={!!checkedMap[childPath]}
-                  onChange={() => {
-                    const newMap = {
-                      ...checkedMap,
-                      [childPath]: !checkedMap[childPath],
-                    };
-                    setCheckedMap(newMap);
-                    asyncLocalStorageSetItem("dqm2_tree_checked", newMap);
-                  }}
-                  className="peer w-5 h-5 border-2 border-blue-400 rounded-full checked:bg-blue-500 checked:border-transparent focus:outline-none transition-colors duration-150 align-middle appearance-none flex-shrink-0"
-                  style={{
-                    position: "relative",
-                    zIndex: 1,
-                    background: "none",
-                  }}
-                />
-                {/* チェック時のみチェックマークを表示 */}
-                <svg
-                  className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 w-5 h-5 text-white peer-checked:block hidden"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{ zIndex: 2 }}
-                >
-                  <title>チェック済み</title>
-                  <polyline points="5 10.5 9 15 15 6" />
-                </svg>
-              </div>
-              {/* 🌱野生入手ボタン: チェックがない時のみ表示。wildMapはchild名で参照 */}
-              {!checkedMap[childPath] && (
-                <WildToggleButton
-                  name={child}
-                  wildMap={wildMap}
-                  setWildMap={setWildMap}
-                />
-              )}
-              {/* 性別切替ボタン: チェック時のみ表示 */}
-              {checkedMap[childPath] && (
-                <GenderToggleButton
-                  path={childPath}
-                  genderMap={genderMap}
-                  setGenderMap={setGenderMap}
-                />
-              )}
-            </label>
-            {/* 子の表示: チェックが入っていない、かつ野生入手ボタンもONでない場合のみ。wildMapはchild名で参照 */}
-            {result[child] && !checkedMap[childPath] && !wildMap[child] && (
+              <title>チェック済み</title>
+              <polyline points="5 10.5 9 15 15 6" />
+            </svg>
+          </div>
+          {!checkedMap[path] && (
+            <WildToggleButton
+              name={name}
+              wildMap={wildMap}
+              setWildMap={setWildMap}
+            />
+          )}
+          {checkedMap[path] && (
+            <GenderToggleButton
+              path={path}
+              genderMap={genderMap}
+              setGenderMap={setGenderMap}
+            />
+          )}
+        </label>
+        {/* 子ノード描画 */}
+        {children.length > 0 && !checkedMap[path] && !wildMap[name] && (
+          <ul style={{ marginLeft: 16 }} className="whitespace-nowrap">
+            {children.map((childNode) => (
               <Tree
-                data={result[child]}
-                depth={depth + 1}
-                path={childPath}
+                key={childNode.path}
+                node={childNode}
                 checkedMap={checkedMap}
                 setCheckedMap={setCheckedMap}
                 wildMap={wildMap}
                 setWildMap={setWildMap}
                 genderMap={genderMap}
                 setGenderMap={setGenderMap}
-                visited={nextVisited}
               />
-            )}
-          </li>
-        );
-      })}
+            ))}
+          </ul>
+        )}
+      </li>
     </ul>
   );
 }
@@ -221,51 +201,40 @@ function WildToggleButton({
   );
 }
 
-// 必要なモンスター一覧を取得する再帰関数
-function collectLeafMonsters(
-  name: string,
-  path: string,
-  wildMap: Record<string, boolean>,
+// DisplayTreeNodeから必要なモンスター一覧を集計する関数
+function collectLeafMonstersFromDisplayTree(
+  node: DisplayTreeNode,
   checkedMap: Record<string, boolean>,
-  visited: Set<string> = new Set()
+  wildMap: Record<string, boolean>
 ): string[] {
-  if (checkedMap[path]) return [];
-  if (wildMap[name]) return [name];
-  if (visited.has(name)) return [];
-  const node = result[name];
-  if (!node || !node.childrenList || node.childrenList.length === 0) {
-    return [name];
-  }
-  // 1つ目のパターンのみ
-  const pattern = node.childrenList[0];
-  if (!pattern) return [name];
+  // チェック済みや野生入手ならそのノードのみ
+  if (checkedMap[node.path] || wildMap[node.name]) return [node.name];
+  // 末端ノード
+  if (node.children.length === 0) return [node.name];
   let leaves: string[] = [];
-  const nextVisited = new Set(visited);
-  nextVisited.add(name);
-  pattern.forEach((child, idx) => {
-    const childPath = path ? `${path}/${child}:${idx}` : `${child}:${idx}`;
+  node.children.forEach((child) => {
     leaves = leaves.concat(
-      collectLeafMonsters(child, childPath, wildMap, checkedMap, nextVisited)
+      collectLeafMonstersFromDisplayTree(child, checkedMap, wildMap)
     );
   });
   return leaves;
 }
 
-// 必要なモンスター一覧コンポーネント
+// 必要なモンスター一覧コンポーネント（DisplayTreeNode版）
 function RequiredMonstersList({
-  selected,
-  wildMap,
+  displayTree,
   checkedMap,
+  wildMap,
 }: {
-  selected: string;
-  wildMap: Record<string, boolean>;
+  displayTree: DisplayTreeNode | null;
   checkedMap: Record<string, boolean>;
+  wildMap: Record<string, boolean>;
 }) {
-  const leaves = collectLeafMonsters(
-    selected,
-    `${selected}:0`,
-    wildMap,
-    checkedMap
+  if (!displayTree) return null;
+  const leaves = collectLeafMonstersFromDisplayTree(
+    displayTree,
+    checkedMap,
+    wildMap
   );
   // モンスターごとに個数をカウント
   const countMap: Record<string, number> = {};
@@ -366,6 +335,7 @@ function DeleteProgressButton({
 export default function Home() {
   const [input, setInput] = useState("");
   const [selected, setSelected] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
   const candidates = useMemo(() => getCandidates(input), [input]);
   const [checkedMap, setCheckedMap] = useState<
     Record<string, Record<string, boolean>>
@@ -374,6 +344,10 @@ export default function Home() {
   const [genderMap, setGenderMap] = useState<
     Record<string, Record<string, number>>
   >({});
+  const [isMeguriaiEnabled] = useState(true); // めぐり合い活用機能ON固定
+  const globalVisitedRef = useRef<Set<string>>(new Set());
+  const [displayTree, setDisplayTree] = useState<DisplayTreeNode | null>(null);
+  const workerRef = useRef<Worker | null>(null);
 
   // selectedが変わったとき、なければ空objectをセット
   useEffect(() => {
@@ -411,6 +385,51 @@ export default function Home() {
       return newGenderMap;
     });
   };
+
+  // グローバル訪問済みSetを初期化（JSX外で副作用実行）
+  if (selected) {
+    globalVisitedRef.current.clear();
+    globalVisitedRef.current.add(selected);
+  }
+
+  // WebWorkerでdisplayTreeを構築
+  useEffect(() => {
+    if (!selected) {
+      setDisplayTree(null);
+      setIsLoading(false);
+      return;
+    }
+    let loadingTimer: NodeJS.Timeout | null = null;
+    let isUnmounted = false;
+    // 0.1秒後にまだloadingならisLoadingをtrueにする
+    loadingTimer = setTimeout(() => {
+      if (!isUnmounted) setIsLoading(true);
+    }, 100);
+    if (!workerRef.current) {
+      workerRef.current = new Worker(
+        new URL("../utils/treeWorker.ts", import.meta.url),
+        { type: "module" }
+      );
+    }
+    const worker = workerRef.current;
+    worker.onmessage = (e) => {
+      setDisplayTree(e.data);
+      setIsLoading(false);
+      if (loadingTimer) clearTimeout(loadingTimer);
+    };
+    worker.postMessage({
+      selected,
+      checkedMap: checkedMapForSelected,
+      wildMap,
+      isMeguriaiEnabled,
+      result,
+    });
+    return () => {
+      isUnmounted = true;
+      if (loadingTimer) clearTimeout(loadingTimer);
+      worker.onmessage = null;
+    };
+  }, [selected, checkedMapForSelected, wildMap, isMeguriaiEnabled]);
 
   return (
     <div className="mx-auto p-6">
@@ -451,33 +470,44 @@ export default function Home() {
         selected={selected}
         setSelected={setSelected}
       />
-      {selected && result[selected] && (
+      {selected && (
         <div className="mt-6">
-          <h2 className="text-xl font-semibold mb-2">
-            {selected} の配合ツリー
-          </h2>
-          <Tree
-            data={result[selected]}
-            depth={0}
-            path={`${selected}:0`}
-            checkedMap={checkedMapForSelected}
-            setCheckedMap={setCheckedMapForSelected}
-            wildMap={wildMap}
-            setWildMap={setWildMap}
-            genderMap={genderMapForSelected}
-            setGenderMap={setGenderMapForSelected}
-          />
-          <RequiredMonstersList
-            selected={selected}
-            wildMap={wildMap}
-            checkedMap={checkedMapForSelected}
-          />
-          <DeleteProgressButton
-            selected={selected}
-            setCheckedMap={setCheckedMap}
-            setGenderMap={setGenderMap}
-            setSelected={setSelected}
-          />
+          {isLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <span className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mr-3"></span>
+              <span className="text-blue-400 text-lg font-semibold">
+                計算中...
+              </span>
+            </div>
+          ) : (
+            displayTree && (
+              <>
+                <h2 className="text-xl font-semibold mb-2">
+                  {selected} の配合ツリー
+                </h2>
+                <Tree
+                  node={displayTree}
+                  checkedMap={checkedMapForSelected}
+                  setCheckedMap={setCheckedMapForSelected}
+                  wildMap={wildMap}
+                  setWildMap={setWildMap}
+                  genderMap={genderMapForSelected}
+                  setGenderMap={setGenderMapForSelected}
+                />
+                <RequiredMonstersList
+                  displayTree={displayTree}
+                  checkedMap={checkedMapForSelected}
+                  wildMap={wildMap}
+                />
+                <DeleteProgressButton
+                  selected={selected}
+                  setCheckedMap={setCheckedMap}
+                  setGenderMap={setGenderMap}
+                  setSelected={setSelected}
+                />
+              </>
+            )
+          )}
         </div>
       )}
     </div>
