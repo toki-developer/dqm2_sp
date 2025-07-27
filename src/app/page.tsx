@@ -207,8 +207,10 @@ function collectLeafMonstersFromDisplayTree(
   checkedMap: Record<string, boolean>,
   wildMap: Record<string, boolean>
 ): string[] {
-  // チェック済みや野生入手ならそのノードのみ
-  if (checkedMap[node.path] || wildMap[node.name]) return [node.name];
+  // チェック済みなら何も返さない
+  if (checkedMap[node.path]) return [];
+  // 野生入手ならそのノードのみ
+  if (wildMap[node.name]) return [node.name];
   // 末端ノード
   if (node.children.length === 0) return [node.name];
   let leaves: string[] = [];
@@ -231,6 +233,7 @@ function RequiredMonstersList({
   wildMap: Record<string, boolean>;
 }) {
   if (!displayTree) return null;
+  // 末端ノードのうち「未チェック」のものだけを集計
   const leaves = collectLeafMonstersFromDisplayTree(
     displayTree,
     checkedMap,
