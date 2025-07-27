@@ -332,6 +332,157 @@ function DeleteProgressButton({
   );
 }
 
+// 設定モーダル用UI
+function SettingsModal({
+  open,
+  onClose,
+  isMeguriaiEnabled,
+  setIsMeguriaiEnabled,
+}: {
+  open: boolean;
+  onClose: () => void;
+  isMeguriaiEnabled: boolean;
+  setIsMeguriaiEnabled: (v: boolean) => void;
+}) {
+  if (!open) return null;
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: <explanation>
+    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: <explanation>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-end p-4 bg-black/30"
+      tabIndex={-1}
+      role="presentation"
+      aria-modal="true"
+      onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+      onKeyUp={(e) => {
+        if (e.key === "Enter") onClose();
+      }}
+    >
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-5 w-80 relative animate-fade-in"
+        style={{ minWidth: 280, maxWidth: "90vw" }}
+        role="dialog"
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onClose();
+        }}
+        aria-modal="true"
+      >
+        {/* 閉じる(X)ボタン 右上配置 */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="閉じる"
+          className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 20 20"
+            fill="none"
+            aria-hidden="true"
+          >
+            <title>閉じる</title>
+            <line
+              x1="5"
+              y1="5"
+              x2="15"
+              y2="15"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <line
+              x1="15"
+              y1="5"
+              x2="5"
+              y2="15"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+        <h3 className="text-lg font-bold mb-3 flex items-center">設定</h3>
+        <div className="flex items-center mb-4">
+          <span className="font-medium">めぐりあい活用</span>
+          <TooltipInfoButton />
+          <button
+            type="button"
+            className={`ml-8 relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+              isMeguriaiEnabled ? "bg-blue-500" : "bg-gray-300"
+            }`}
+            onClick={() => setIsMeguriaiEnabled(!isMeguriaiEnabled)}
+            aria-pressed={isMeguriaiEnabled}
+            aria-label="めぐり合い活用ON/OFF"
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                isMeguriaiEnabled ? "translate-x-5" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- 下部にTooltipInfoButtonコンポーネントを追加 ---
+function TooltipInfoButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="ml-2 text-blue-400 cursor-pointer relative select-none flex items-center">
+      <button
+        type="button"
+        aria-label="めぐり合い活用の説明を表示"
+        className="p-0 m-0 bg-transparent border-none outline-none"
+        onClick={() => setOpen((v) => !v)}
+        tabIndex={0}
+      >
+        <svg
+          width="18"
+          height="18"
+          fill="none"
+          viewBox="0 0 24 24"
+          aria-label="説明"
+        >
+          <title>めぐりあい活用の説明</title>
+          <circle
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="2"
+          />
+          <text
+            x="12"
+            y="16"
+            textAnchor="middle"
+            fontSize="13"
+            fill="currentColor"
+          >
+            i
+          </text>
+        </svg>
+      </button>
+      {open && (
+        <span
+          className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-10 bg-gray-800 text-white text-xs rounded px-4 py-2 whitespace-pre-line shadow-lg max-w-sm min-w-[220px] break-words text-center pointer-events-auto border border-gray-700"
+          style={{ wordBreak: "break-word" }}
+          role="tooltip"
+        >
+          {`同じモンスターがツリー内で複数回出現する場合、\n2体目以降は「めぐりあいのカギ」で取得することを想定して末端扱いとします`}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function Home() {
   const [input, setInput] = useState("");
   const [selected, setSelected] = useState<string>("");
@@ -344,7 +495,14 @@ export default function Home() {
   const [genderMap, setGenderMap] = useState<
     Record<string, Record<string, number>>
   >({});
-  const [isMeguriaiEnabled] = useState(true); // めぐり合い活用機能ON固定
+  const [isMeguriaiEnabled, setIsMeguriaiEnabled] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem("dqm2_tree_meguriai");
+      if (saved !== null) return saved === "true";
+    }
+    return false;
+  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const globalVisitedRef = useRef<Set<string>>(new Set());
   const [displayTree, setDisplayTree] = useState<DisplayTreeNode | null>(null);
   const workerRef = useRef<Worker | null>(null);
@@ -365,6 +523,10 @@ export default function Home() {
       if (wildSaved) setWildMap(JSON.parse(wildSaved));
       const genderSaved = window.localStorage.getItem("dqm2_tree_gender");
       if (genderSaved) setGenderMap(JSON.parse(genderSaved));
+      // めぐり合い活用設定も反映
+      const meguriaiSaved = window.localStorage.getItem("dqm2_tree_meguriai");
+      if (meguriaiSaved !== null)
+        setIsMeguriaiEnabled(meguriaiSaved === "true");
     }
   }, []);
 
@@ -404,7 +566,7 @@ export default function Home() {
     // 0.1秒後にまだloadingならisLoadingをtrueにする
     loadingTimer = setTimeout(() => {
       if (!isUnmounted) setIsLoading(true);
-    }, 100);
+    }, 1);
     if (!workerRef.current) {
       workerRef.current = new Worker(
         new URL("../utils/treeWorker.ts", import.meta.url),
@@ -432,7 +594,7 @@ export default function Home() {
   }, [selected, checkedMapForSelected, wildMap, isMeguriaiEnabled]);
 
   return (
-    <div className="mx-auto p-6">
+    <div className="mx-auto p-6 relative">
       <h1 className="text-2xl font-bold mb-4">配合ツリー検索</h1>
       <input
         type="search"
@@ -510,6 +672,39 @@ export default function Home() {
           )}
         </div>
       )}
+      {/* 設定ボタン（右下固定） */}
+      <button
+        type="button"
+        className="fixed bottom-6 right-6 z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-full shadow-lg p-3 flex items-center justify-center hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors"
+        style={{ width: 52, height: 52 }}
+        onClick={() => setSettingsOpen(true)}
+        aria-label="設定を開く"
+      >
+        <svg
+          width="28"
+          height="28"
+          fill="none"
+          viewBox="0 0 24 24"
+          aria-label="設定"
+        >
+          <title>設定</title>
+          <path
+            d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7Zm7.43-2.9c.04-.32.07-.65.07-.98s-.03-.66-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.03 7.03 0 0 0-1.7-.98l-.38-2.65A.5.5 0 0 0 13 2h-4a.5.5 0 0 0-.5.42l-.38 2.65c-.63.24-1.22.56-1.77.98l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.14.24.44.32.68.22l2.49-1c.55.42 1.14.77 1.77.98l.38 2.65c.05.28.27.42.5.42h4c.23 0 .45-.14.5-.42l.38-2.65c.63-.21 1.22-.56 1.7-.98l2.49 1c.24.1.54.02.68-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65Z"
+            fill="currentColor"
+          />
+        </svg>
+      </button>
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        isMeguriaiEnabled={isMeguriaiEnabled}
+        setIsMeguriaiEnabled={(v) => {
+          setIsMeguriaiEnabled(v);
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem("dqm2_tree_meguriai", String(v));
+          }
+        }}
+      />
     </div>
   );
 }
